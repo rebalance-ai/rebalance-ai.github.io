@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="title" content="Efficient Reasoning with Balanced Thinking">
+  <meta name="description" content="ReBalance is a training-free framework that dynamically steers LRM reasoning to simultaneously mitigate overthinking and underthinking while improving accuracy.">
+  <meta name="keywords" content="Large Reasoning Models, efficient reasoning, overthinking, underthinking, steering vectors, confidence control, ICLR 2026">
+  <meta name="author" content="Yulin Li">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Efficient Reasoning with Balanced Thinking">
+  <meta property="og:description" content="Training-free dynamic steering for balancing overthinking and underthinking in LRMs.">
+  <meta property="og:url" content="https://rebalance-ai.github.io">
+  <meta property="og:image" content="https://rebalance-ai.github.io/assets/method.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Efficient Reasoning with Balanced Thinking">
+  <meta name="twitter:description" content="ReBalance: efficient reasoning with balanced thinking, accepted at ICLR 2026.">
+  <meta name="theme-color" content="#0d7c7a">
+  <title>Efficient Reasoning with Balanced Thinking | ReBalance | ICLR 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    :root {
+      --bg: #f5f4ee;
+      --surface: #fffdf8;
+      --surface-2: #f0fbfa;
+      --text: #173035;
+      --muted: #4f696f;
+      --line: #d2e0df;
+      --accent: #0d7c7a;
+      --accent-2: #e86f1e;
+      --accent-3: #194c82;
+      --maxw: 1160px;
+      --radius: 18px;
+      --shadow: 0 10px 35px rgba(17, 57, 64, 0.12);
+      --shadow-soft: 0 8px 24px rgba(17, 57, 64, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(1200px 600px at 10% -10%, #dff7f2, transparent),
+                  radial-gradient(1100px 560px at 90% -20%, #ffe8d7, transparent),
+                  var(--bg);
+      font-family: "Sora", sans-serif;
+      line-height: 1.55;
+      overflow-x: hidden;
+    }
+
+    .orb {
+      position: fixed;
+      width: 28rem;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      filter: blur(55px);
+      opacity: 0.28;
+      pointer-events: none;
+      z-index: -1;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+
+    .orb.a {
+      background: #7ad3c2;
+      top: -8rem;
+      left: -10rem;
+    }
+
+    .orb.b {
+      background: #ffc58e;
+      right: -8rem;
+      top: 28rem;
+      animation-duration: 24s;
+    }
+
+    .orb.c {
+      background: #97b6da;
+      left: 50%;
+      bottom: -14rem;
+      transform: translateX(-50%);
+      animation-duration: 20s;
+    }
+
+    @keyframes drift {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(2rem, -1.4rem) scale(1.08); }
+    }
+
+    .container {
+      width: min(var(--maxw), 92%);
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(10px);
+      background: rgba(245, 244, 238, 0.75);
+      border-bottom: 1px solid rgba(23, 48, 53, 0.08);
+      z-index: 40;
+    }
+
+    .topbar-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.82rem 0;
+    }
+
+    .brand {
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: var(--accent-3);
+      font-size: 0.98rem;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.87rem;
+      font-weight: 600;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      background: rgba(13, 124, 122, 0.12);
+      color: var(--accent);
+    }
+
+    section {
+      padding: 3.5rem 0;
+    }
+
+    .hero {
+      padding-top: 4.5rem;
+      padding-bottom: 2.8rem;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 0.8fr;
+      gap: 1.1rem;
+      align-items: stretch;
+    }
+
+    .hero-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(239, 250, 248, 0.94));
+      border: 1px solid rgba(13, 124, 122, 0.16);
+      border-radius: calc(var(--radius) + 4px);
+      padding: 1.35rem 1.35rem 1.45rem;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      inset: -40% auto auto -15%;
+      width: 21rem;
+      height: 21rem;
+      background: radial-gradient(circle, rgba(13, 124, 122, 0.16), transparent 70%);
+      pointer-events: none;
+    }
+
+    .venue {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.3rem 0.68rem;
+      border-radius: 999px;
+      border: 1px solid rgba(25, 76, 130, 0.25);
+      color: var(--accent-3);
+      background: rgba(25, 76, 130, 0.08);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0.72rem 0 0.78rem;
+      font-size: clamp(1.95rem, 4.6vw, 3.1rem);
+      line-height: 1.12;
+      letter-spacing: -0.015em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 62ch;
+      font-size: 1rem;
+    }
+
+    .authors {
+      margin-top: 1rem;
+      color: #26424a;
+      font-size: 0.91rem;
+    }
+
+    .authors strong {
+      color: #102e33;
+    }
+
+    .affils {
+      margin-top: 0.68rem;
+      color: #4d666d;
+      font-size: 0.82rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.8rem;
+    }
+
+    .buttons {
+      margin-top: 1.12rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.62rem;
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 0.66rem 0.94rem;
+      font-weight: 700;
+      font-size: 0.88rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      color: #ecffff;
+      box-shadow: 0 8px 18px rgba(13, 124, 122, 0.23);
+    }
+
+    .btn.secondary {
+      background: #f3f8ff;
+      color: var(--accent-3);
+      border: 1px solid rgba(25, 76, 130, 0.2);
+    }
+
+    .btn.ghost {
+      background: #fff5eb;
+      color: #95460a;
+      border: 1px solid rgba(232, 111, 30, 0.26);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .metric-stack {
+      background: linear-gradient(180deg, #fffdf8, #f0f8ff);
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: calc(var(--radius) + 4px);
+      padding: 1.05rem;
+      box-shadow: var(--shadow-soft);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+      align-content: start;
+    }
+
+    .metric {
+      background: white;
+      border: 1px solid rgba(23, 48, 53, 0.08);
+      border-radius: 14px;
+      padding: 0.85rem 0.72rem;
+      min-height: 6.4rem;
+    }
+
+    .metric .num {
+      font-size: 1.58rem;
+      font-weight: 800;
+      color: #0f515b;
+      line-height: 1;
+    }
+
+    .metric .label {
+      margin-top: 0.45rem;
+      font-size: 0.8rem;
+      color: #5b757c;
+      letter-spacing: 0.01em;
+    }
+
+    .section-head {
+      margin-bottom: 1.15rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(1.5rem, 3.7vw, 2.2rem);
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 70ch;
+      font-size: 0.95rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.9rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.1);
+      border-radius: var(--radius);
+      padding: 1.05rem;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    .tag {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 0.26rem 0.6rem;
+      font-size: 0.73rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      background: rgba(13, 124, 122, 0.14);
+      color: #0b6361;
+    }
+
+    .card h3 {
+      margin: 0.64rem 0 0.45rem;
+      font-size: 1.03rem;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #516b71;
+    }
+
+    .abstract {
+      background: linear-gradient(155deg, rgba(237, 251, 249, 0.9), rgba(255, 248, 241, 0.9));
+      border: 1px solid rgba(13, 124, 122, 0.18);
+    }
+
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.9rem;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: 16px;
+      padding: 1rem;
+      position: relative;
+      min-height: 12.6rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .step .index {
+      width: 1.9rem;
+      height: 1.9rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #ebffff;
+      background: linear-gradient(135deg, #107f7d, #195483);
+      margin-bottom: 0.62rem;
+    }
+
+    .step h3 {
+      margin: 0.45rem 0 0.4rem;
+      font-size: 0.98rem;
+    }
+
+    .step p {
+      margin: 0;
+      font-size: 0.84rem;
+      color: #576f75;
+    }
+
+    .equation {
+      margin-top: 0.85rem;
+      font-family: "Newsreader", serif;
+      background: #f8fbfe;
+      border: 1px dashed rgba(25, 76, 130, 0.35);
+      border-radius: 12px;
+      padding: 0.7rem 0.8rem;
+      font-size: 0.93rem;
+      color: #224560;
+      overflow-x: auto;
+    }
+
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    .sim-panel {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: var(--radius);
+      padding: 1.05rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .control {
+      margin-bottom: 1rem;
+    }
+
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1f3f45;
+      margin-bottom: 0.46rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .mode-pill {
+      display: inline-flex;
+      padding: 0.3rem 0.68rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      margin-bottom: 0.8rem;
+      border: 1px solid transparent;
+    }
+
+    .mode-over {
+      color: #1f4863;
+      background: rgba(25, 76, 130, 0.12);
+      border-color: rgba(25, 76, 130, 0.26);
+    }
+
+    .mode-under {
+      color: #85510d;
+      background: rgba(232, 111, 30, 0.15);
+      border-color: rgba(232, 111, 30, 0.3);
+    }
+
+    .mode-balanced {
+      color: #115f5e;
+      background: rgba(13, 124, 122, 0.13);
+      border-color: rgba(13, 124, 122, 0.27);
+    }
+
+    .steering-track {
+      position: relative;
+      height: 2.2rem;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(25, 76, 130, 0.12), rgba(255, 255, 255, 0.95), rgba(232, 111, 30, 0.14));
+      border: 1px solid rgba(23, 48, 53, 0.14);
+      overflow: hidden;
+    }
+
+    .steering-track .zero {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: rgba(23, 48, 53, 0.34);
+    }
+
+    .steering-fill {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      background: linear-gradient(90deg, #195483, #0d7c7a, #e86f1e);
+      transition: left 0.35s ease, width 0.35s ease;
+      opacity: 0.9;
+    }
+
+    .sim-values {
+      margin-top: 0.8rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+
+    .sim-values .v {
+      background: #f8fdfc;
+      border: 1px solid rgba(23, 48, 53, 0.1);
+      border-radius: 10px;
+      padding: 0.5rem;
+    }
+
+    .sim-values .k {
+      font-size: 0.7rem;
+      color: #647d83;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 700;
+    }
+
+    .sim-values .n {
+      margin-top: 0.22rem;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #15353b;
+    }
+
+    .sim-note {
+      margin-top: 0.8rem;
+      color: #4f686f;
+      font-size: 0.85rem;
+    }
+
+    .plot-stack {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.72rem;
+    }
+
+    .plot-card {
+      background: #fbfffe;
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 12px;
+      padding: 0.6rem;
+    }
+
+    .plot-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.42rem;
+    }
+
+    .plot-head h3 {
+      margin: 0;
+      font-size: 0.88rem;
+      color: #22444b;
+    }
+
+    .plot-head span {
+      color: #5b757b;
+      font-size: 0.73rem;
+      font-weight: 700;
+    }
+
+    .plot-canvas {
+      width: 100%;
+      height: 310px;
+    }
+
+    .threshold-note {
+      margin-top: 0.7rem;
+      color: #587177;
+      font-size: 0.8rem;
+    }
+
+    .visual-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    .figure-tile {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .figure-media {
+      background: #edf5f4;
+      border-bottom: 1px solid rgba(23, 48, 53, 0.09);
+    }
+
+    .figure-media img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+    }
+
+    #why .figure-media {
+      height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.45rem;
+      background: #eef5f4;
+    }
+
+    #why .figure-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .figure-body {
+      padding: 0.85rem 0.9rem 1rem;
+    }
+
+    .figure-body h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #1f4249;
+    }
+
+    .figure-body p {
+      margin: 0.45rem 0 0;
+      font-size: 0.86rem;
+      color: #526c72;
+    }
+
+    .takeaway-strip {
+      margin-top: 0.88rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+
+    .takeaway {
+      background: #f7fcfa;
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: 11px;
+      padding: 0.62rem;
+      font-size: 0.82rem;
+      color: #456068;
+      font-weight: 600;
+    }
+
+    .wide-figure {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 0.9rem;
+    }
+
+    .wide-figure img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .storyboard {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 16px;
+      padding: 0.95rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .story-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-bottom: 0.72rem;
+    }
+
+    .story-btn {
+      border: 1px solid rgba(23, 48, 53, 0.18);
+      background: #fff;
+      color: #2e5158;
+      border-radius: 9px;
+      padding: 0.4rem 0.66rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .story-btn.active {
+      background: rgba(13, 124, 122, 0.12);
+      border-color: rgba(13, 124, 122, 0.35);
+      color: #0f6260;
+    }
+
+    .story-stage {
+      border: 1px solid rgba(23, 48, 53, 0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #edf5f4;
+    }
+
+    .story-stage img {
+      width: 100%;
+      display: block;
+      transition: opacity 0.24s ease, transform 0.24s ease;
+    }
+
+    .story-stage img.switching {
+      opacity: 0.2;
+      transform: scale(0.985);
+    }
+
+    .story-copy {
+      margin-top: 0.72rem;
+      background: #f8fdfc;
+      border: 1px solid rgba(23, 48, 53, 0.1);
+      border-radius: 10px;
+      padding: 0.72rem;
+    }
+
+    .story-copy h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      color: #21444b;
+    }
+
+    .story-copy p {
+      margin: 0.45rem 0 0;
+      font-size: 0.86rem;
+      color: #527077;
+    }
+
+    .sim-legend {
+      margin-top: 0.72rem;
+      background: #f8fdfc;
+      border: 1px solid rgba(23, 48, 53, 0.1);
+      border-radius: 10px;
+      padding: 0.58rem 0.64rem;
+      font-size: 0.8rem;
+      color: #4a666d;
+      line-height: 1.45;
+    }
+
+    .sim-legend strong {
+      color: #214147;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.88rem;
+    }
+
+    .model-btn {
+      border: 1px solid rgba(23, 48, 53, 0.16);
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 0.42rem 0.72rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #35545a;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .model-btn.active {
+      border-color: rgba(13, 124, 122, 0.35);
+      background: rgba(13, 124, 122, 0.12);
+      color: #0b6260;
+      transform: translateY(-1px);
+    }
+
+    .benchmark-wrap {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: var(--radius);
+      padding: 1rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .benchmark-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.7rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .sum-card {
+      border-radius: 12px;
+      padding: 0.7rem;
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      background: #fbfffd;
+    }
+
+    .sum-card .k {
+      font-size: 0.76rem;
+      color: #5d767c;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .sum-card .n {
+      margin-top: 0.15rem;
+      font-size: 1.36rem;
+      color: #0d5057;
+      font-weight: 800;
+    }
+
+    .bench-row {
+      margin-bottom: 0.78rem;
+      border: 1px solid rgba(23, 48, 53, 0.09);
+      background: #fffdf8;
+      border-radius: 12px;
+      padding: 0.62rem 0.68rem;
+    }
+
+    .bench-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .bench-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #234149;
+      margin-bottom: 0.42rem;
+    }
+
+    .bar-item {
+      display: grid;
+      grid-template-columns: 1.45fr 4fr auto;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 0.3rem 0;
+    }
+
+    .bar-item span {
+      font-size: 0.75rem;
+      color: #5a7379;
+      font-weight: 700;
+    }
+
+    .bar {
+      height: 0.56rem;
+      border-radius: 999px;
+      background: #ecf4f3;
+      border: 1px solid rgba(23, 48, 53, 0.08);
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .fill.gain {
+      background: linear-gradient(90deg, #f3af73, #e86f1e);
+    }
+
+    .fill.token {
+      background: linear-gradient(90deg, #76cfc8, #0d7c7a);
+    }
+
+    .bar-item .val {
+      font-size: 0.76rem;
+      color: #1f4147;
+      font-weight: 800;
+      min-width: 4.1rem;
+      text-align: right;
+    }
+
+    .qual-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.9rem;
+    }
+
+    .qual {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.11);
+      border-radius: var(--radius);
+      padding: 1rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .qual h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .qual small {
+      color: #567178;
+      font-weight: 700;
+    }
+
+    .qual .tokens {
+      margin: 0.45rem 0 0.55rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #23454c;
+    }
+
+    .qual ul {
+      margin: 0;
+      padding-left: 1rem;
+      color: #506970;
+      font-size: 0.86rem;
+    }
+
+    .case-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .case-tab {
+      border: 1px solid rgba(23, 48, 53, 0.18);
+      background: #ffffff;
+      color: #2f535a;
+      border-radius: 10px;
+      padding: 0.45rem 0.72rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .case-tab.active {
+      border-color: rgba(13, 124, 122, 0.35);
+      background: rgba(13, 124, 122, 0.12);
+      color: #0f6462;
+    }
+
+    .case-panel {
+      display: none;
+      grid-template-columns: 1.35fr 0.65fr;
+      gap: 0.9rem;
+      animation: caseFade 0.28s ease;
+    }
+
+    .case-panel.active {
+      display: grid;
+    }
+
+    @keyframes caseFade {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .sample-card {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 14px;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .sample-head {
+      padding: 0.65rem 0.8rem;
+      border-bottom: 1px solid rgba(23, 48, 53, 0.1);
+      background: #f8fcfb;
+    }
+
+    .sample-head p {
+      margin: 0.2rem 0;
+      font-size: 0.83rem;
+      color: #48656c;
+    }
+
+    .sample-body {
+      padding: 0.78rem 0.82rem 0.88rem;
+      max-height: 600px;
+      overflow: auto;
+      font-size: 0.83rem;
+      line-height: 1.62;
+      color: #28474f;
+      background: #fffefb;
+      word-break: break-word;
+    }
+
+    .sample-body p {
+      margin: 0 0 0.65rem;
+    }
+
+    .sample-body strong {
+      color: #1f434a;
+    }
+
+    .hl-red {
+      background: rgba(225, 59, 59, 0.12);
+      color: #9c2020;
+      border-bottom: 1px solid rgba(198, 38, 38, 0.44);
+      padding: 0 0.12rem;
+      border-radius: 2px;
+      font-weight: 700;
+    }
+
+    .sample-aside {
+      display: grid;
+      gap: 0.8rem;
+      align-content: start;
+    }
+
+    .aside-card {
+      background: var(--surface);
+      border: 1px solid rgba(23, 48, 53, 0.12);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+      padding: 0.75rem 0.78rem;
+    }
+
+    .aside-card h3 {
+      margin: 0;
+      font-size: 0.92rem;
+      color: #25474e;
+    }
+
+    .aside-card p {
+      margin: 0.45rem 0 0;
+      font-size: 0.82rem;
+      color: #516d74;
+    }
+
+    .result-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .result-pill.long {
+      color: #7a4107;
+      background: rgba(236, 146, 75, 0.16);
+      border-color: rgba(236, 146, 75, 0.36);
+    }
+
+    .result-pill.wrong {
+      color: #8b1f1f;
+      background: rgba(223, 78, 78, 0.14);
+      border-color: rgba(223, 78, 78, 0.34);
+    }
+
+    .result-pill.good {
+      color: #13603f;
+      background: rgba(58, 182, 117, 0.16);
+      border-color: rgba(58, 182, 117, 0.34);
+    }
+
+    .resources-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    .citation {
+      background: #f8fbfe;
+      border: 1px solid rgba(25, 76, 130, 0.2);
+      border-radius: 12px;
+      padding: 0.85rem;
+      font-size: 0.78rem;
+      overflow-x: auto;
+      margin-top: 0.7rem;
+      color: #1d3d55;
+      line-height: 1.45;
+    }
+
+    .foot {
+      padding: 2.1rem 0 2.8rem;
+      color: #597278;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .top-btn {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      border: 1px solid rgba(23, 48, 53, 0.2);
+      background: #ffffff;
+      color: #20434a;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+      transition: opacity 0.24s ease, transform 0.24s ease;
+      box-shadow: var(--shadow-soft);
+      font-size: 1rem;
+      z-index: 35;
+    }
+
+    .top-btn.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      .hero-grid,
+      .sim-grid,
+      .resources-grid,
+      .visual-pair {
+        grid-template-columns: 1fr;
+      }
+
+      .cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .method-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .qual-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .case-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 650px) {
+      section {
+        padding: 2.8rem 0;
+      }
+
+      .metric-stack {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .method-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .benchmark-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .takeaway-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .bar-item {
+        grid-template-columns: 1.2fr 3.5fr auto;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .plot-canvas {
+        height: 250px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
+
+      .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb a"></div>
+  <div class="orb b"></div>
+  <div class="orb c"></div>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a href="#top" class="brand">ReBalance</a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#abstract">Abstract</a>
+        <a href="#why">Why</a>
+        <a href="#motivation">Motivation</a>
+        <a href="#method">Method</a>
+        <a href="#simulator">Simulator</a>
+        <a href="#benchmarks">Benchmarks</a>
+        <a href="#qualitative">Examples</a>
+        <a href="#resources">Resources</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero reveal">
+      <div class="container hero-grid">
+        <article class="hero-card">
+          <span class="venue">Published at ICLR 2026</span>
+          <h1>Efficient Reasoning with Balanced Thinking</h1>
+          <p class="subtitle">
+            ReBalance is a training-free framework that dynamically steers large reasoning models to achieve balanced thinking, reducing reasoning length while simultaneously improving accuracy.
+          </p>
+          <div class="authors">
+            <strong>Yulin Li*</strong>, <strong>Tengyao Tu*</strong>, Li Ding, Junjie Wang, Huiling Zhen, Yixin Chen, Yong Li, Zhuotao Tian
+          </div>
+          <div class="affils">
+            <span>1 Harbin Institute of Technology (Shenzhen)</span>
+            <span>2 Huawei Noah's Ark Lab</span>
+            <span>3 Tsinghua University</span>
+            <span>4 The Chinese University of Hong Kong</span>
+            <span>5 Zhongguancun Academy</span>
+            <span>6 Shenzhen Loop Area Institute</span>
+          </div>
+          <div class="buttons">
+            <a class="btn primary" href="https://openreview.net/pdf/fbb3e20f02ae434c5f840d91314a46e6033bd57d.pdf" target="_blank" rel="noopener noreferrer">Paper PDF</a>
+            <a class="btn secondary" href="https://github.com/yu-lin-li/ReBalance" target="_blank" rel="noopener noreferrer">Code</a>
+            <a class="btn ghost" href="#simulator">Try Interactive Simulator</a>
+          </div>
+        </article>
+
+        <aside class="metric-stack">
+          <div class="metric">
+            <div class="num"><span class="counter" data-target="4">0</span></div>
+            <div class="label">Model scales (0.5B to 32B)</div>
+          </div>
+          <div class="metric">
+            <div class="num"><span class="counter" data-target="9">0</span></div>
+            <div class="label">Benchmarks across math, general QA, coding</div>
+          </div>
+          <div class="metric">
+            <div class="num">+<span class="counter" data-target="10" data-decimals="1">0</span></div>
+            <div class="label">Best Pass@1 gain on AIME tasks</div>
+          </div>
+          <div class="metric">
+            <div class="num"><span class="counter" data-target="35.4" data-decimals="1">0</span>%</div>
+            <div class="label">Largest token reduction (GSM8K)</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="abstract" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Abstract</h2>
+          <p>Balanced thinking refers to eliminating redundant reasoning while retaining sufficient exploration to guarantee correctness.</p>
+        </div>
+        <article class="card abstract">
+          <p>
+            Large Reasoning Models (LRMs) have shown remarkable reasoning capabilities, yet they often suffer from overthinking, expending redundant computational steps on simple problems, or underthinking, failing to explore sufficient reasoning paths despite inherent capabilities. These issues lead to inefficiencies and potential inaccuracies, limiting practical deployment in resource-constrained settings. Existing methods to mitigate overthinking, such as suppressing reflective keywords or adjusting reasoning length, may inadvertently induce underthinking, compromising accuracy. Therefore, we propose ReBalance, a training-free framework that achieves efficient reasoning with balanced thinking. ReBalance leverages confidence as a continuous indicator of reasoning dynamics, identifying overthinking through high confidence variance and underthinking via consistent overconfidence. By aggregating hidden states from a small-scale dataset into reasoning mode prototypes, we compute a steering vector to guide LRMs' reasoning trajectories. A dynamic control function modulates this vector's strength and direction based on real-time confidence, pruning redundancy during overthinking, and promoting exploration during underthinking. Extensive experiments conducted on four models ranging from 0.5B to 32B, and across nine benchmarks in math reasoning, general question answering, and coding tasks demonstrate that ReBalance effectively reduces output redundancy while improving accuracy, offering a general, training-free, and plug-and-play strategy for efficient and robust LRM deployment.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="why" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Why ReBalance</h2>
+          <p>ReBalance simultaneously addresses the two failure modes of LRMs: redundant overthinking and premature underthinking.</p>
+        </div>
+        <div class="visual-pair">
+          <article class="figure-tile">
+            <div class="figure-media">
+              <img src="assets/overview_left.png" alt="Qualitative comparison between baseline, previous method and ReBalance">
+            </div>
+            <div class="figure-body">
+              <h3>Balanced Thinking Unlocking Smarter Reasoning</h3>
+              <p>Given the question "For what real values of $x$ is $-4 < x^{4} + 4x^{2} < 21$?", the model first obtains intervals $(-\sqrt{3}, 0)$ and $(0, \sqrt{3})$, and then verifies whether $x = 0$ is included. However, the model redundantly checks irrelevant values after correctly validating $x = 0$, causing overthinking. Current mitigation methods overly suppress necessary reflection, leading to underthinking. ReBalance dynamically controls the reasoning state, effectively balancing these two extremes.</p>
+            </div>
+          </article>
+          <article class="figure-tile">
+            <div class="figure-media">
+              <img src="assets/overview_right.png" alt="Quantitative comparison showing quality-efficiency tradeoff">
+            </div>
+            <div class="figure-body">
+              <h3>Superior Performance</h3>
+              <p>ReBalance outperforms previous state-of-the-art methods across multiple mathematical reasoning datasets and model scales (0.5B–32B), reducing reasoning length while simultaneously improving accuracy.</p>
+            </div>
+          </article>
+        </div>
+        <div class="takeaway-strip">
+          <div class="takeaway">Overthinking: redundant reasoning steps and delayed answer convergence.</div>
+          <div class="takeaway">Underthinking: premature commitment to incorrect reasoning paths.</div>
+          <div class="takeaway">Balanced Thinking (ReBalance): concise and sufficient reasoning.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="motivation" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Motivation: Why Existing Mitigation Is Not Enough</h2>
+          <p>Shorter reasoning is not always better: reducing overthinking can inadvertently induce underthinking.</p>
+        </div>
+        <article class="wide-figure">
+          <img src="assets/motivation.png" alt="Motivation analysis of overthinking mitigation and confidence dynamics">
+        </article>
+        <div class="cards">
+          <article class="card">
+            <span class="tag">Length Distributions</span>
+            <h3>Balanced reduction matters</h3>
+            <p>A good method should reduce redundant reasoning for easy samples without collapsing reasoning depth for hard cases. ReBalance achieves this balance better than previous methods.</p>
+          </article>
+          <article class="card">
+            <span class="tag">Confidence Dynamics</span>
+            <h3>Confidence reveals reasoning state</h3>
+            <p>High confidence variance indicates frequent path switching (overthinking), while consistent overconfidence can lead to premature commitment to incorrect reasoning paths (underthinking).</p>
+          </article>
+          <article class="card">
+            <span class="tag">Design Goal</span>
+            <h3>Continuous and reliable control</h3>
+            <p>Instead of retaining or discarding the entire reasoning path, ReBalance continuously modulates reasoning trajectories using confidence-aware dynamic steering.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="method" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Method Pipeline</h2>
+          <p>Offline one-pass data collection + online dynamic steering, connected by confidence signals.</p>
+        </div>
+        <article class="wide-figure">
+          <img src="assets/method.png" alt="Method illustration of one-pass collection and online dynamic steering">
+        </article>
+        <div class="cards">
+          <article class="card">
+            <span class="tag">Offline Stage</span>
+            <h3>One-pass data collection</h3>
+            <p>on a small-scale seen dataset, at each step, the steering vector is extracted at the first token of the specified layer based on confidence, and a dynamic function is fitted according to model behaviors.</p>
+          </article>
+          <article class="card">
+            <span class="tag">Online Stage</span>
+            <h3>Inference with Dynamic Steering</h3>
+            <p>During deployment, the dynamic function outputs steering weights based on the model's real-time confidence online, thus balancing between overthinking and underthinking.</p>
+          </article>
+          <article class="card">
+            <span class="tag">Practical Benefit</span>
+            <h3>Training-free and plug-and-play</h3>
+            <p>No extra model training is required. The mechanism can be attached to different reasoning models and tasks with low deployment overhead.</p>
+          </article>
+        </div>
+        <div class="method-grid">
+          <article class="step">
+            <div class="index">1</div>
+            <h3>Compute confidence signals</h3>
+            <p>For each reasoning step, compute stepwise confidence and local-window confidence variance.</p>
+          </article>
+          <article class="step">
+            <div class="index">2</div>
+            <h3>Model reasoning modes</h3>
+            <p>Use quantile thresholds to classify steps into overthinking set O and underthinking set U.</p>
+          </article>
+          <article class="step">
+            <div class="index">3</div>
+            <h3>Extract steering vector</h3>
+            <p>Aggregate deep-layer hidden states into prototypes and define steering from underthinking to overthinking.</p>
+          </article>
+          <article class="step">
+            <div class="index">4</div>
+            <h3>Apply dynamic control</h3>
+            <p>At each step, adapt steering direction and strength based on current confidence and variance.</p>
+          </article>
+        </div>
+        <div class="equation" aria-label="Dynamic control equation">
+          <strong>Dynamic steering weight:</strong>
+          &nbsp;\(
+          g(c_s,v_s)=\underbrace{\mathrm{sign}\!\big(c_s-\tau_c^{\mathrm{H}}\big)}_{\text{Steering direction}\,\delta_s}
+          \cdot
+          \underbrace{B(c_s,v_s)\,\tanh\!\Big(\big|c_s-\tau_c^{\mathrm{H}}\big|\Big)}_{\text{Steering strength}\,\lambda_s}
+          \)
+        </div>
+      </div>
+    </section>
+
+    <section id="simulator" class="reveal">
+      <div class="container sim-grid">
+        <article class="sim-panel">
+          <div class="section-head">
+            <h2>Interactive Dynamic Steering Simulator</h2>
+            <p>Use the sliders to see how ReBalance changes steering behavior based on stepwise confidence and confidence variance in real time.</p>
+          </div>
+          <div class="control">
+            <label for="confidenceSlider">Stepwise Confidence <span id="confidenceValue">0.80</span></label>
+            <input id="confidenceSlider" type="range" min="0" max="1" value="0.80" step="0.001">
+          </div>
+          <div class="control">
+            <label for="varianceSlider">Confidence Variance <span id="varianceValue">0.003500</span></label>
+            <input id="varianceSlider" type="range" min="0" max="1" value="0.8" step="0.001">
+          </div>
+          <div id="modePill" class="mode-pill mode-balanced">Balanced Thinking</div>
+          <div class="sim-values">
+            <div class="v">
+              <div class="k">Steering<br>Weight</div>
+              <div class="n" id="fValue">0.00</div>
+            </div>
+            <div class="v">
+              <div class="k">Overthinking Tendency</div>
+              <div class="n" id="wLowValue">0.00</div>
+            </div>
+            <div class="v">
+              <div class="k">Underthinking Tendency</div>
+              <div class="n" id="wHighValue">0.00</div>
+            </div>
+          </div>
+          <div class="sim-legend">
+            <strong>How to read this:</strong> negative steering weights encourage the model to conclude earlier (mitigate overthinking), while positive scores encourage more exploration (mitigate underthinking).
+          </div>
+          <p class="sim-note" id="simNote"></p>
+        </article>
+
+        <article class="sim-panel">
+          <div class="section-head">
+            <h2>How the Controller Behaves</h2>
+            <p>The 3D surface and 2D map show the same controlling function. The red dot is your current reasoning state.</p>
+          </div>
+          <div class="plot-stack">
+            <div class="plot-card">
+              <div class="plot-head">
+                <h3>3D Control Landscape</h3>
+                <span>Red dot = current state</span>
+              </div>
+              <div id="surface3d" class="plot-canvas"></div>
+            </div>
+            <div class="plot-card">
+              <div class="plot-head">
+                <h3>2D Top View of the Same Landscape</h3>
+                <span>Contours show equal control levels</span>
+              </div>
+              <div id="surface2d" class="plot-canvas"></div>
+            </div>
+          </div>
+          <p class="threshold-note">Dashed guide lines indicate q25/q75 boundaries in confidence and variance, which separate balanced thinking, overthinking, and underthinking regions.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="benchmarks" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Benchmark Explorer</h2>
+          <p>Switch model scales to inspect Pass@1 improvements and token reductions (vs. baseline).</p>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Model scale selector">
+          <button class="model-btn active" data-model="DeepSeek-R1-Distill-Qwen-1.5B">DeepSeek 1.5B</button>
+          <button class="model-btn" data-model="DeepSeek-R1-Distill-Qwen-7B">DeepSeek 7B</button>
+          <button class="model-btn" data-model="Qwen3-14B">Qwen3 14B</button>
+          <button class="model-btn" data-model="QwQ-32B">QwQ 32B</button>
+        </div>
+        <article class="benchmark-wrap">
+          <div class="benchmark-summary">
+            <div class="sum-card">
+              <div class="k">Average Pass@1 gain</div>
+              <div class="n" id="avgGain">+0.0</div>
+            </div>
+            <div class="sum-card">
+              <div class="k">Average token reduction</div>
+              <div class="n" id="avgToken">0.0%</div>
+            </div>
+          </div>
+          <div id="benchmarkGrid"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="qualitative" class="reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Qualitative Examples: Overthinking vs Underthinking vs Balanced Thinking</h2>
+          <p>For the same input question, original large reasoning models (Overthinking), existing overthinking mitigation methods (Underthinking), and our ReBalance (Balanced Thinking) exhibit distinct reasoning behaviors. Red highlights indicate critical signals emphasizing key behavioral differences.</p>
+        </div>
+        <div class="case-tabs" role="tablist" aria-label="Qualitative case switcher">
+          <button class="case-tab active" data-case-key="overthinking">Overthinking</button>
+          <button class="case-tab" data-case-key="underthinking">Underthinking</button>
+          <button class="case-tab" data-case-key="balanced">Balanced Thinking</button>
+        </div>
+
+        <div class="case-panel active" data-case-panel="overthinking">
+          <article class="sample-card">
+            <div class="sample-head">
+              <p><strong>Question:</strong> For what real values of \(x\) is \(-4 &lt; x^4 + 4x^2 &lt; 21\) satisfied?</p>
+              <p><strong>Expected interval form:</strong> \((-\sqrt{3}, \sqrt{3})\)</p>
+            </div>
+            <div class="sample-body">
+              <p>
+                Generated response: Alright, so I have this inequality to solve: -4 < x⁴ + 4x² < 21. Hmm, okay. It looks like a quartic inequality because of the x⁴ term. I remember that to solve such inequalities, I can break it down into two separate inequalities and solve each part separately. That is, first solve -4 < x⁴ + 4x² and then solve x⁴ + 4x² < 21. After that, I can find the intersection of the solutions from both parts to get the final answer.\n\nLet me start by rewriting the inequality:\n\n-4 < x⁴ + 4x² < 21.\n\nSo, I'll split this into two parts:\n\n1. x⁴ + 4x² > -4\n2. x⁴ + 4x² < 21\n\nStarting with the first inequality: x⁴ + 4x² > -4.\n\nHmm, x⁴ is always non-negative since any real number raised to an even power is positive or zero. Similarly, 4x² is also non-negative for the same reason. So, adding them together, x⁴ + 4x² is always greater than or equal to zero. But here, the right side is -4, which is negative. So, is it possible for x⁴ + 4x² to be greater than -4?\n\nWell, since x⁴ + 4x² is always at least zero, and zero is greater than -4, that inequality x⁴ + 4x² > -4 is always true for all real numbers x. So, the first part doesn't impose any restrictions on x. That's a relief; I don't have to worry about excluding any x from the solution set because the left inequality is always satisfied.\n\nNow, moving on to the second inequality: x⁴ + 4x² < 21.\n\nThis one is more challenging. Let's try to simplify or rearrange it. Maybe I can set y = x² to make it easier to handle. Since x² is always non-negative, y ≥ 0. Substituting, the inequality becomes y² + 4y < 21.\n\nSo, let me write that out:\n\ny² + 4y - 21 < 0.\n\nNow, I can solve this quadratic inequality in terms of y. First, let's find the roots of the equation y² + 4y - 21 = 0.\n\nUsing the quadratic formula: y = [-b ± \sqrt{b² - 4ac}] / 2a.\n\nHere, a = 1, b = 4, c = -21.\n\nPlugging in, we get:\n\ny = [-4 ± \sqrt{16 - 4*1*(-21)}] / 2\n= [-4 ± \sqrt{16 + 84}] / 2\n= [-4 ± \sqrt{100}] / 2\n= [-4 ± 10] / 2.\n\nSo, the roots are:\n\ny = (-4 + 10)/2 = 6/2 = 3,\ny = (-4 - 10)/2 = (-14)/2 = -7.\n\nBut since y = x² and x² can't be negative, y can't be -7. So, the only relevant root is y = 3.\n\nNow, to solve the inequality y² + 4y - 21 < 0, we can analyze the intervals determined by the roots. Since the quadratic opens upwards (because the coefficient of y² is positive), the quadratic will be below zero between its two roots. However, one of the roots is negative (y = -7), which we can ignore because y is non-negative. So, the relevant interval is from y = -7 to y = 3. But since y can't be negative, we only consider y from 0 to 3.\n\nThus, the inequality y² + 4y - 21 < 0 holds when y is between 0 and 3, i.e., 0 < y < 3.\n\n<span class="hl-red">But remember, y = x², so substituting back,</span> we get:\n\n0 < x² < 3.\n\nThis inequality implies that x² is between 0 and 3. To find x, we can take square roots.\n\nFirst, since x² > 0, that means x ≠ 0. But we have to consider x² < 3 as well.\n\nSo, x² < 3 implies that |x| < \sqrt{3}, which means x is in the interval (-\sqrt{3}, \sqrt{3}).\n\nPutting it all together, the second inequality x⁴ + 4x² < 21 is satisfied when x is between -\sqrt{3} and \sqrt{3}, excluding zero? Wait, hold on. No, actually, since x² > 0, the inequality x² < 3 holds for all x in (-\sqrt{3}, \sqrt{3}) except x = 0. But actually, when x = 0, x⁴ + 4x² = 0, which is less than 21. So, actually, x = 0 is included.\n\n<span class="hl-red">Wait, let's think again.</span> When we transformed x⁴ + 4x² < 21 into y² + 4y - 21 < 0, we found that y must be between 0 and 3. Since y = x², that translates to x² between 0 and 3. So, x² < 3, which is equivalent to |x| < \sqrt{3}, meaning x is in (-\sqrt{3}, \sqrt{3}). So, actually, x can be zero here because when x is zero, x⁴ + 4x² = 0, which is indeed less than 21. So, the interval is from -\sqrt{3} to \sqrt{3}, including zero.\n\n<span class="hl-red">Wait, but in the first inequality,</span> x⁴ + 4x² > -4 is always true. So, combining both inequalities, the solution is all x such that x is in (-\sqrt{3}, \sqrt{3}). Is that right?\n\n<span class="hl-red">Wait, but when x is zero,</span> x⁴ + 4x² is zero, which is less than 21, so it's included. So, the solution set is all real numbers x such that x is between -\sqrt{3} and \sqrt{3}.\n\n<span class="hl-red">But let me double-check this.</span> Let's test a value inside the interval, say x = 1. Then, x⁴ + 4x² = 1 + 4 = 5, which is between -4 and 21. So, it's valid.\n\nWhat about x = \sqrt{3}? Then, x⁴ + 4x² = (\sqrt{3})^4 + 4*(\sqrt{3})^2 = (9) + 4*(3) = 9 + 12 = 21, which is equal to the upper limit. So, x = \sqrt{3} is not included because the inequality is strict (< 21). Similarly, x = -\sqrt{3} is also not included.\n\nWhat about x = 2? Then, x⁴ + 4x² = 16 + 16 = 32, which is greater than 21, so it's excluded. So, indeed, the solution is x between -\sqrt{3} and \sqrt{3}, not including the endpoints.\n\n<span class="hl-red">Wait, but let me check x = 0.5,</span> which is inside the interval. x⁴ + 4x² = (0.5)^4 + 4*(0.5)^2 = 0.0625 + 4*(0.25) = 0.0625 + 1 = 1.0625, which is between -4 and 21, so it's valid.\n\n<span class="hl-red">What about x = 1.5,</span> which is still less than \sqrt{3} (since \sqrt{3} ≈ 1.732). x⁴ + 4x² = (1.5)^4 + 4*(1.5)^2 = 5.0625 + 4*(2.25) = 5.0625 + 9 = 14.0625, which is still less than 21, so it's valid.\n\n<span class="hl-red">How about x = \sqrt{3} ≈ 1.732? </span>As we saw earlier, x⁴ + 4x² = 21, so it's exactly 21, which isn't included. Similarly, x = -\sqrt{3} gives 21 as well.\n\nSo, putting it all together, the solution is all real numbers x such that -\sqrt{3} < x < \sqrt{3}.\n\nBut wait, let me think again about the first inequality. Since x⁴ + 4x² is always greater than or equal to zero, which is greater than -4, so the first inequality doesn't restrict x at all. So, the only restriction comes from the second inequality.\n\nTherefore, combining both inequalities, the solution is x ∈ (-\sqrt{3}, \sqrt{3}).\n\n<span class="hl-red">But just to make sure, let me consider if there are any points outside of this interval that satisfy both inequalities.</span> For example, x = 2, which is outside, as we saw, gives x⁴ + 4x² = 32, which is greater than 21, so it's excluded. Similarly, x = -2 gives the same result. What about x = \sqrt{3}, as we saw, gives 21, which is excluded. x = 0, gives 0, which is included.\n\nSo, yeah, it seems that the only x that satisfy both inequalities are those in the interval (-\sqrt{3}, \sqrt{3}). Therefore, in interval notation, that would be (-\sqrt{3}, \sqrt{3}).\n\n<span class="hl-red">Wait, just to double-check,</span> is there any way for x⁴ + 4x² to be less than or equal to -4? Since x⁴ + 4x² is always non-negative, it can't be less than -4. So, the only time when it's less than 21 is when it's between 0 and 21. But x⁴ + 4x² is 0 at x = 0, and as x increases or decreases, it grows. So, when does it reach 21? At x = ±\sqrt{3}, as we saw.\n\nTherefore, the solution is indeed x ∈ (-\sqrt{3}, \sqrt{3}). So, in interval notation, that's written as (-\sqrt{3}, \sqrt{3}).\n\n<span class="hl-red">But wait, just to make sure,</span> let me consider the quadratic in y. So, we had y² + 4y - 21 < 0, with y = x² ≥ 0. We found that y is between 0 and 3, which corresponds to x between -\sqrt{3} and \sqrt{3}.\n\nYes, that seems consistent.\n\nSo, I think I can confidently say that the solution is all real numbers x such that x is between -\sqrt{3} and \sqrt{3}.\n\n**Final Answer**\nThe solution is \\boxed{(-\\sqrt{3}, \\sqrt{3})}.\n</think>......Therefore, the solution to the inequality \\(-4 < x^4 + 4x^2 < 21\\) is:\n\\[\n\\boxed{(-\\sqrt{3}, \\sqrt{3})}\n\\]
+              </p>
+            </div>
+          </article>
+          <aside class="sample-aside">
+            <article class="aside-card">
+              <h3>Behavior Signal</h3>
+              <p>The model repeatedly revisits already-settled boundary checks. Red highlights indicate repeated verification loops.</p>
+            </article>
+            <article class="aside-card">
+              <h3>Outcome</h3>
+              <p><span class="result-pill long">Redundant reasoning (1659 tokens)</span></p>
+            </article>
+          </aside>
+        </div>
+
+        <div class="case-panel" data-case-panel="underthinking">
+          <article class="sample-card">
+            <div class="sample-head">
+              <p><strong>Question:</strong> For what real values of \(x\) is \(-4 &lt; x^4 + 4x^2 &lt; 21\) satisfied?</p>
+              <p><strong>Expected interval form:</strong> \((-\sqrt{3}, \sqrt{3})\)</p>
+            </div>
+            <div class="sample-body">
+              <p>
+                Generated response: Okay, so I have this inequality to solve: -4 < x⁴ + 4x² < 21. Hmm, I need to find all real numbers x that satisfy this. Let me think about how to approach this.\n\nFirst, I notice that the expression is a quartic polynomial, but it's only in terms of x². Maybe I can make a substitution to simplify it. Let me set y = x². Then, the inequality becomes -4 < y² + 4y < 21. That seems easier to handle because it's a quadratic in terms of y.\n\nSo, now I have two inequalities to solve:\n\n1. y² + 4y > -4\n2. y² + 4y < 21\n\nLet me tackle the first one: y² + 4y > -4. I can rewrite this as y² + 4y + 4 > 0. Hmm, that looks like a perfect square. Let me check: (y + 2)² = y² + 4y + 4. Yes, that's correct. So, the inequality becomes (y + 2)² > 0.\n\nWhen is a square greater than zero? Well, squares are always non-negative, so (y + 2)² is greater than zero when y + 2 is not equal to zero. That means y ≠ -2. But wait, y was defined as x², and x² is always non-negative. So, y can't be negative. Therefore, y = -2 is not possible because x² can't be negative. So, the inequality (y + 2)² > 0 is always true except when y = -2, which isn't in our domain. So, the first inequality is always satisfied for all real x except when y = -2, but since y can't be negative, this inequality doesn't restrict x at all. So, the first part doesn't impose any restrictions.\n\nNow, moving on to the second inequality: y² + 4y < 21. Let me rewrite this as y² + 4y - 21 < 0. To solve this quadratic inequality, I need to find the roots of the equation y² + 4y - 21 = 0. I can use the quadratic formula: y = [-b ± sqrt(b² - 4ac)] / (2a). Here, a = 1, b = 4, c = -21.\n\nCalculating the discriminant: b² - 4ac = 16 - 4(1)(-21) = 16 + 84 = 100. That's a perfect square, which is nice. So, the roots are y = [-4 ± sqrt(100)] / 2 = [-4 ± 10] / 2.\n\nCalculating the two roots:\n\n1. y = (-4 + 10)/2 = 6/2 = 3\n2. y = (-4 - 10)/2 = (-14)/2 = -7\n\nSo, the roots are y = 3 and y = -7. Since y = x², and x² can't be negative, y can't be -7. Therefore, the relevant root is y = 3.\n\nNow, the quadratic y² + 4y - 21 factors as (y - 3)(y + 7). But since y can't be negative, we only consider y ≥ 0. So, the quadratic is negative between its roots. But since one root is negative and the other is positive, the quadratic is negative between y = -7 and y = 3. However, since y can't be less than 0, the relevant interval is y between 0 and 3.\n\nTherefore, the inequality y² + 4y - 21 < 0 holds when 0 < y < 3. Since y = x², this translates to 0 < x² < 3.\n\nNow, let's solve 0 < x² < 3. The inequality 0 < x² means that x is not zero, so x ≠ 0. The inequality x² < 3 implies that -sqrt(3) < x < sqrt(3). Combining these, we get -sqrt(3) < x < 0 and 0 < x < sqrt(3). So, in interval notation, that's (-sqrt(3), 0) union (0, sqrt(3)).\n\nBut wait, let me double-check. The original inequality was -4 < x⁴ + 4x² < 21. We transformed it to y² + 4y < 21, <span class="hl-red">which gave us 0 < y < 3, so 0 < x² < 3, which is indeed -sqrt(3) < x < sqrt(3) excluding x=0. So, that seems correct.</span>\n\nBut just to be thorough, let me test some values to make sure.\n\nFirst, let's test x = 1. Then, x⁴ + 4x² = 1 + 4 = 5. Is 5 between -4 and 21? Yes, it is.\n\nWhat about x = \sqrt(3)? Then, x⁴ + 4x² = (sqrt(3))^4 + 4*(sqrt(3))^2 = (9) + 4*(3) = 9 + 12 = 21. So, 21 is the upper bound, but the inequality is strict, so x = sqrt(3) is not included. Similarly, x = -sqrt(3) is not included.\n\nWhat about x = 0? Then, x⁴ + 4x² = 0 + 0 = 0, which is between -4 and 21. So, x = 0 is included? \n</think>\n\nThe solution involves substituting y = x², transforming the inequality into a quadratic, and solving for y. The resulting interval for y is 0 < y < 3, which translates to x being in (-sqrt(3), 0) union (0, sqrt(3)).\n\n**Answer:** The solution in interval notation is:\n\\[\n\\boxed{(-\\sqrt{3}, 0) \\cup (0, \\sqrt{3})}\n\\]
+              </p>
+            </div>
+          </article>
+          <aside class="sample-aside">
+            <article class="aside-card">
+              <h3>Behavior Signal</h3>
+              <p>The model stops too early after rough transformation and skips a necessary final consistency check.</p>
+            </article>
+            <article class="aside-card">
+              <h3>Outcome</h3>
+              <p><span class="result-pill wrong">Insufficient reasoning (834 tokens)</span></p>
+            </article>
+          </aside>
+        </div>
+
+        <div class="case-panel" data-case-panel="balanced">
+          <article class="sample-card">
+            <div class="sample-head">
+              <p><strong>Question:</strong> For what real values of \(x\) is \(-4 &lt; x^4 + 4x^2 &lt; 21\) satisfied?</p>
+              <p><strong>Expected interval form:</strong> \((-\sqrt{3}, \sqrt{3})\)</p>
+            </div>
+            <div class="sample-body">
+              <p>
+                Generated response: Okay, so I have this inequality to solve: -4 < x⁴ + 4x² < 21. Hmm, it's a quartic inequality because of the x⁴ term. I remember that for inequalities with polynomials, especially even degree ones, the graphs tend to have a U-shape on both ends. So, the function f(x) = x⁴ + 4x² will go to infinity as x approaches both positive and negative infinity. That means the function will have a minimum somewhere in the middle.\n\nFirst, maybe I should try to solve the inequality step by step. It's like two separate inequalities: x⁴ + 4x² > -4 and x⁴ + 4x² < 21. But since x⁴ and x² are always non-negative (because any real number squared is non-negative, and raising it to the fourth power is also non-negative), their sum will also be non-negative. So, x⁴ + 4x² is always greater than or equal to zero. That means the first inequality, x⁴ + 4x² > -4, is always true because a non-negative number is always greater than -4. So, I don't have to worry about that part; it doesn't restrict the solution set.\n\nSo, the real work is solving the second inequality: x⁴ + 4x² < 21. Let me rewrite that as x⁴ + 4x² - 21 < 0. Maybe I can factor this expression or find its roots to figure out where it's negative.\n\nLet me try to factor x⁴ + 4x² - 21. Hmm, noticing that it's a quadratic in terms of x², I can let y = x², so the equation becomes y² + 4y - 21 = 0. Let me solve for y.\n\nUsing the quadratic formula: y = [-4 ± sqrt(16 + 84)] / 2 = [-4 ± sqrt(100)] / 2 = [-4 ± 10]/2.\n\nSo, the solutions are y = (-4 + 10)/2 = 6/2 = 3, and y = (-4 - 10)/2 = -14/2 = -7. So, y = 3 or y = -7.\n\nBut y = x², which is always non-negative, so y = -7 doesn't make sense in this context. So, the only relevant solution is y = 3. Therefore, x² = 3, so x = sqrt(3) or x = -sqrt(3).\n\nSo, that means the quartic function x⁴ + 4x² - 21 is zero at x = sqrt(3) and x = -sqrt(3). Since it's a quartic function opening upwards (because the coefficient of x⁴ is positive), the graph will touch the x-axis at x = sqrt(3) and x = -sqrt(3), and it will be below the x-axis between these two roots.\n\nSo, the inequality x⁴ + 4x² - 21 < 0 holds when x is between -sqrt(3) and sqrt(3). Therefore, the solution to the original inequality -4 < x⁴ + 4x² < 21 is the same as x⁴ + 4x² < 21, which is when x is between -sqrt(3) and sqrt(3).\n\nBut wait, I should check if there are any other intervals or points where the inequality might hold. Since the quartic is always greater than or equal to zero, and we're looking for it to be less than 21, which is a positive number, so it's only between the two roots where it dips below 21.\n\nSo, that means x must satisfy -sqrt(3) < x < sqrt(3). Let me verify that with some test points.\n\n<span class="hl-red">For x = 0: 0⁴ + 4*(0)² = 0, which is between -4 and 21, so that's good.\n\nFor x = 1: 1 + 4 = 5, which is between -4 and 21, so that's fine.\n\nFor x = 2: 16 + 16 = 32, which is greater than 21, so that's outside the solution.\n\nFor x = sqrt(3): approx 1.732, the function equals 21, so that's the boundary.</span>\n\nSimilarly, for x = -sqrt(3): same result.\n\nSo, the interval from -sqrt(3) to sqrt(3) is where the function is less than 21, and since the other inequality is always true, the solution is just that interval.\n\nTherefore, in interval notation, the solution is (-sqrt(3), sqrt(3)).\n\n**Final Answer**\nThe solution is \\boxed{(-\\sqrt{3}, \\sqrt{3})}.\n</think>\n\nTo solve the inequality \\(-4 < x^4 + 4x^2 < 21\\), we start by noting that \\(x^4 + 4x^2\\) is always non-negative because it is a sum of squares. Therefore, the inequality \\(x^4 + 4x^2 > -4\\) is always true.\n\nNext, we focus on the inequality \\(x^4 + 4x^2 < 21\\). We rewrite this as \\(x^4 + 4x^2 - 21 < 0\\). Letting \\(y = x^2\\), we transform the equation into a quadratic: \\(y^2 + 4y - 21 = 0\\). Solving this quadratic equation using the quadratic formula, we find the roots:\n\n\\[\ny = \\frac{-4 \\pm \\sqrt{16 + 84}}{2} = \\frac{-4 \\pm 10}{2}\n\\]\n\nThis gives us \\(y = 3\\) and \\(y = -7\\). Since \\(y = x^2\\) must be non-negative, we discard \\(y = -7\\). Thus, \\(x^2 = 3\\) gives \\(x = \\sqrt{3}\\) or \\(x = -\\sqrt{3}\\).\n\nThe function \\(x^4 + 4x^2 - 21\\) is a quartic that opens upwards and is zero at \\(x = \\sqrt{3}\\) and \\(x = -\\sqrt{3}\\). It is negative between these roots. Therefore, the inequality \\(x^4 + 4x^2 < 21\\) holds for \\(x\\) in the interval \\((- \\sqrt{3}, \\sqrt{3})\\).\n\nThus, the solution to the original inequality \\(-4 < x^4 + 4x^2 < 21\\) is:\n\n\\[\n\\boxed{(-\\sqrt{3}, \\sqrt{3})}\n\\]
+              </p>
+            </div>
+          </article>
+          <aside class="sample-aside">
+            <article class="aside-card">
+              <h3>Behavior Signal</h3>
+              <p>The model performs only essential checks, then commits once confidence is justified.</p>
+            </article>
+            <article class="aside-card">
+              <h3>Outcome</h3>
+              <p><span class="result-pill good">Concise and sufficient reasoning (875 tokens)</span></p>
+            </article>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="resources" class="reveal">
+      <div class="container resources-grid">
+        <article class="card">
+          <span class="tag">Resources</span>
+          <h3>Project Assets</h3>
+          <p>Use the links below for paper reading, implementation, and contact.</p>
+          <div class="buttons">
+            <a class="btn primary" href="https://openreview.net/pdf/fbb3e20f02ae434c5f840d91314a46e6033bd57d.pdf" target="_blank" rel="noopener noreferrer">Open PDF</a>
+            <a class="btn secondary" href="https://github.com/yu-lin-li/ReBalance" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+            <a class="btn ghost" href="mailto:tianzhuotao@hit.edu.cn">Contact</a>
+          </div>
+        </article>
+        <article class="card">
+          <span class="tag">Citation</span>
+          <h3>BibTeX</h3>
+          <p>If ReBalance is useful for your research, please cite:</p>
+          <pre class="citation" id="bibtex">@inproceedings{li2026efficient,
+  title={Efficient Reasoning with Balanced Thinking},
+  author={Li, Yulin and Tu, Tengyao and Ding, Li and Wang, Junjie and Zhen, Huiling and Chen, Yixin and Li, Yong and Tian, Zhuotao},
+  booktitle={Proceedings of the 14th International Conference on Learning Representations},
+  year={2026}
+}</pre>
+          <button id="copyBib" class="btn secondary" type="button">Copy BibTeX</button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="container">
+      <p>* indicates equal contribution. Corresponding author: Zhuotao Tian.</p>
+      <p>© 2026 ReBalance Project Page.</p>
+    </div>
+  </footer>
+
+  <button class="top-btn" id="topBtn" aria-label="Back to top">↑</button>
+
+  <script>
+    const benchmarkData = {
+      "DeepSeek-R1-Distill-Qwen-1.5B": [
+        { name: "MATH-500", gain: 3.4, token: 23.1 },
+        { name: "AIME24", gain: 10.0, token: 14.3 },
+        { name: "AIME25", gain: 6.7, token: 16.2 },
+        { name: "GSM8K", gain: 2.3, token: 24.9 },
+        { name: "AMC23", gain: 10.0, token: 30.2 },
+        { name: "Olympiad", gain: 2.7, token: 17.6 }
+      ],
+      "DeepSeek-R1-Distill-Qwen-7B": [
+        { name: "MATH-500", gain: 2.8, token: 21.5 },
+        { name: "AIME24", gain: 6.6, token: 16.6 },
+        { name: "AIME25", gain: 10.0, token: 7.1 },
+        { name: "GSM8K", gain: 2.4, token: 16.9 },
+        { name: "AMC23", gain: 7.5, token: 26.8 },
+        { name: "Olympiad", gain: 0.9, token: 16.7 }
+      ],
+      "Qwen3-14B": [
+        { name: "MATH-500", gain: 0.2, token: 18.5 },
+        { name: "AIME24", gain: 6.6, token: 13.1 },
+        { name: "AIME25", gain: 0.0, token: 15.8 },
+        { name: "GSM8K", gain: 1.2, token: 35.4 },
+        { name: "AMC23", gain: 5.0, token: 27.8 },
+        { name: "Olympiad", gain: 5.7, token: 2.6 }
+      ],
+      "QwQ-32B": [
+        { name: "MATH-500", gain: 0.4, token: 19.3 },
+        { name: "AIME24", gain: 3.3, token: 27.8 },
+        { name: "AIME25", gain: 10.0, token: 8.3 },
+        { name: "GSM8K", gain: 0.5, token: 14.4 },
+        { name: "AMC23", gain: 7.5, token: 13.6 },
+        { name: "Olympiad", gain: 1.9, token: 9.7 }
+      ]
+    };
+
+    const benchmarkGrid = document.getElementById("benchmarkGrid");
+    const avgGain = document.getElementById("avgGain");
+    const avgToken = document.getElementById("avgToken");
+    const modelButtons = Array.from(document.querySelectorAll(".model-btn"));
+
+    function renderBenchmarks(model) {
+      const rows = benchmarkData[model];
+      const maxGain = Math.max(...rows.map(item => item.gain), 10);
+      const maxToken = Math.max(...rows.map(item => item.token), 36);
+      const gainMean = rows.reduce((s, item) => s + item.gain, 0) / rows.length;
+      const tokenMean = rows.reduce((s, item) => s + item.token, 0) / rows.length;
+      avgGain.textContent = `+${gainMean.toFixed(2)}`;
+      avgToken.textContent = `${tokenMean.toFixed(1)}%`;
+
+      benchmarkGrid.innerHTML = rows.map(item => {
+        const gainWidth = (item.gain / maxGain) * 100;
+        const tokenWidth = (item.token / maxToken) * 100;
+        return `
+          <div class="bench-row">
+            <div class="bench-title">${item.name}</div>
+            <div class="bar-item">
+              <span>Pass@1 gain</span>
+              <div class="bar"><div class="fill gain" data-width="${gainWidth.toFixed(2)}"></div></div>
+              <div class="val">+${item.gain.toFixed(1)}</div>
+            </div>
+            <div class="bar-item">
+              <span>Token reduction</span>
+              <div class="bar"><div class="fill token" data-width="${tokenWidth.toFixed(2)}"></div></div>
+              <div class="val">${item.token.toFixed(1)}%</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      requestAnimationFrame(() => {
+        document.querySelectorAll(".fill").forEach(el => {
+          el.style.width = `${el.dataset.width}%`;
+        });
+      });
+    }
+
+    modelButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        modelButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderBenchmarks(btn.dataset.model);
+      });
+    });
+
+    renderBenchmarks("DeepSeek-R1-Distill-Qwen-1.5B");
+
+    const confidenceSlider = document.getElementById("confidenceSlider");
+    const varianceSlider = document.getElementById("varianceSlider");
+    const confidenceValue = document.getElementById("confidenceValue");
+    const varianceValue = document.getElementById("varianceValue");
+    const modePill = document.getElementById("modePill");
+    const fValue = document.getElementById("fValue");
+    const wLowValue = document.getElementById("wLowValue");
+    const wHighValue = document.getElementById("wHighValue");
+    const simNote = document.getElementById("simNote");
+    const surface3d = document.getElementById("surface3d");
+    const surface2d = document.getElementById("surface2d");
+
+    const controlParams = {
+      q25c: 0.67,
+      q75c: 0.94,
+      q25v: 0.000132,
+      q75v: 0.0035,
+      lowVal1: -1.5,
+      lowVal2: -3.3,
+      highVal1: 0.01,
+      highVal2: 2.0,
+      betaC: 2.0,
+      betaV: 2.0
+    };
+
+    const colorMin = -3.0;
+    const colorMax = 1.0;
+    const vMinHeat = Math.max(1e-8, controlParams.q25v / 10.0);
+    const vMin3d = 0.0;
+    const vMax = 3.0 * controlParams.q75v;
+    const logVMin = Math.log(vMinHeat);
+    const logVMax = Math.log(vMax);
+
+    varianceSlider.min = "0";
+    varianceSlider.max = "1";
+    varianceSlider.step = "0.001";
+    confidenceSlider.value = ((controlParams.q25c + controlParams.q75c) / 2).toFixed(3);
+
+    function clamp(x, lo = 0, hi = 1) {
+      return Math.min(hi, Math.max(lo, x));
+    }
+
+    function sliderToVariance(t) {
+      const tt = clamp(t, 0, 1);
+      return Math.exp(logVMin + tt * (logVMax - logVMin));
+    }
+
+    function varianceToSlider(v) {
+      const vv = Math.min(vMax, Math.max(vMinHeat, v));
+      return (Math.log(vv) - logVMin) / (logVMax - logVMin);
+    }
+
+    varianceSlider.value = varianceToSlider(controlParams.q75v).toFixed(3);
+
+    function sigmoid(x) {
+      const z = Math.min(60, Math.max(-60, x));
+      return 1 / (1 + Math.exp(-z));
+    }
+
+    function solveKForTau(q25, q75, lowVal, highVal, tau, iters = 80) {
+      const m = 0.5 * (q25 + q75);
+      const s = Math.max(1e-9, 0.5 * (q75 - q25));
+      const denom = Math.max(highVal - lowVal, 1e-12);
+      const rTarget = (2 * (tau - 0.5 * (lowVal + highVal))) / denom;
+
+      function ratio(k) {
+        const num = Math.tanh(k * Math.max(0, 1 - m));
+        const ks = k * s;
+        const den = ks > 1e-12 ? Math.tanh(ks) : ks;
+        return den > 0 ? num / den : Number.POSITIVE_INFINITY;
+      }
+
+      let lo = 1e-6;
+      let hi = 1.0;
+      while (ratio(hi) > rTarget && hi < 1e6) hi *= 2;
+      for (let i = 0; i < iters; i += 1) {
+        const mid = 0.5 * (lo + hi);
+        if (ratio(mid) > rTarget) lo = mid;
+        else hi = mid;
+      }
+      return 0.5 * (lo + hi);
+    }
+
+    function buildF(q25, q75, lowVal = -3.0, highVal = 0.0, tau = 0.1) {
+      const m = 0.5 * (q25 + q75);
+      const s = Math.max(1e-9, 0.5 * (q75 - q25));
+      const k = solveKForTau(q25, q75, lowVal, highVal, tau);
+      const t = Math.tanh(k * s);
+      const a = 0.5 * (lowVal + highVal);
+      const b = (highVal - lowVal) / (2 * Math.max(t, 1e-12));
+
+      function F(c) {
+        const cc = clamp(Number.isFinite(c) ? c : 0.5, 0, 1);
+        return a + b * Math.tanh(k * (cc - m));
+      }
+      return { F, params: { m, k, a, b } };
+    }
+
+    function makeControlFunction(params) {
+      const q25c = Math.min(params.q25c, params.q75c);
+      const q75c = Math.max(params.q25c, params.q75c);
+      const q25v = Math.min(params.q25v, params.q75v);
+      const q75v = Math.max(params.q25v, params.q75v);
+      const FResult = buildF(q25c, q75c, params.lowVal1, 0.0, params.highVal1);
+      const F = FResult.F;
+      const iqrC = Math.max(1e-12, q75c - q25c);
+      const iqrV = Math.max(1e-12, q75v - q25v);
+
+      const gLowC = (c) => sigmoid(((q25c - c) / iqrC) * params.betaC);
+      const gHighC = (c) => sigmoid(((c - q75c) / iqrC) * params.betaC);
+      const gHighV = (v) => sigmoid(((v - q75v) / iqrV) * params.betaV);
+      const gLowV = (v) => sigmoid(((q25v - v) / iqrV) * params.betaV);
+
+      const gp = gLowC(q25c) * gHighV(q75v);
+      const gm = gHighC(1.0) * gLowV(q25v);
+      const eps = 1e-6;
+      const fQ25 = F(q25c);
+      const f1 = F(1.0);
+
+      const wLow = (c, v) => Math.min(1.0, (gLowC(c) * gHighV(v)) / Math.max(gp, eps));
+      const wHigh = (c, v) => Math.min(1.0, (gHighC(c) * gLowV(v)) / Math.max(gm, eps));
+
+      const f = (c, v) => (
+        F(c)
+        + (params.lowVal2 - fQ25) * wLow(c, v)
+        + (params.highVal2 - f1) * wHigh(c, v)
+      );
+
+      return { f, F, wLow, wHigh, q25c, q75c, q25v, q75v };
+    }
+
+    function linspace(start, end, n) {
+      if (n <= 1) return [start];
+      const step = (end - start) / (n - 1);
+      return Array.from({ length: n }, (_, i) => start + step * i);
+    }
+
+    function geomspace(start, end, n) {
+      if (n <= 1) return [start];
+      const ls = Math.log(start);
+      const le = Math.log(end);
+      const step = (le - ls) / (n - 1);
+      return Array.from({ length: n }, (_, i) => Math.exp(ls + step * i));
+    }
+
+    const controlFn = makeControlFunction(controlParams);
+    const cAxis = linspace(0, 1, 95);
+    const vAxis3d = linspace(vMin3d, vMax, 180);
+    const vAxis2d = geomspace(vMinHeat, vMax, 220);
+    const zGrid3d = vAxis3d.map(v => cAxis.map(c => controlFn.f(c, v)));
+    const zGrid2d = vAxis2d.map(v => cAxis.map(c => controlFn.f(c, v)));
+    const zStats3d = (() => {
+      let zMin = Number.POSITIVE_INFINITY;
+      let zMax = Number.NEGATIVE_INFINITY;
+      for (const row of zGrid3d) {
+        for (const z of row) {
+          if (z < zMin) zMin = z;
+          if (z > zMax) zMax = z;
+        }
+      }
+      return { min: zMin, max: zMax };
+    })();
+    const zSpan = Math.max(1e-6, zStats3d.max - zStats3d.min);
+    const markerLift = Math.max(0.035, 0.018 * zSpan);
+    const vTicksLinear = [0.0, 0.002, 0.004, 0.006, 0.008, 0.010];
+    const vTickTextLinear = ["0", "0.002", "0.004", "0.006", "0.008", "0.010"];
+    const vTicksLog = [1e-5, 1e-4, 1e-3, 1e-2].filter((t) => t >= vMinHeat && t <= vMax);
+    const vTickTextLog = vTicksLog.map((t) => t.toExponential(0).replace("+", ""));
+    let plotsReady = false;
+
+    function setModeClass(mode) {
+      modePill.className = "mode-pill";
+      if (mode === "Overthinking") modePill.classList.add("mode-over");
+      if (mode === "Underthinking") modePill.classList.add("mode-under");
+      if (mode === "Balanced Thinking") modePill.classList.add("mode-balanced");
+    }
+
+    function thresholdShapes() {
+      const lineStyle = { color: "rgba(35,65,73,0.55)", width: 1, dash: "dash" };
+      return [
+        { type: "line", x0: controlFn.q25c, x1: controlFn.q25c, y0: vMinHeat, y1: vMax, line: lineStyle },
+        { type: "line", x0: controlFn.q75c, x1: controlFn.q75c, y0: vMinHeat, y1: vMax, line: lineStyle },
+        { type: "line", x0: 0, x1: 1, y0: controlFn.q25v, y1: controlFn.q25v, line: lineStyle },
+        { type: "line", x0: 0, x1: 1, y0: controlFn.q75v, y1: controlFn.q75v, line: lineStyle }
+      ];
+    }
+
+    function initPlots(c, v) {
+      if (typeof Plotly === "undefined") {
+        surface3d.textContent = "Plotly failed to load.";
+        surface2d.textContent = "Plotly failed to load.";
+        return;
+      }
+
+      const zVal = controlFn.f(c, v);
+      const zVis = zVal + markerLift;
+      Plotly.newPlot("surface3d", [
+        {
+          type: "surface",
+          x: cAxis,
+          y: vAxis3d,
+          z: zGrid3d,
+          colorscale: "Viridis",
+          cmin: colorMin,
+          cmax: colorMax,
+          showscale: true,
+          colorbar: {
+            title: { text: "steering weight", side: "right", font: { size: 12, color: "#24464d" } },
+            len: 0.72,
+            y: 0.54,
+            thickness: 11,
+            tickfont: { size: 10, color: "#35565d" },
+            outlinewidth: 0.6,
+            outlinecolor: "rgba(26,59,66,0.55)"
+          }
+        },
+        {
+          type: "scatter3d",
+          mode: "lines",
+          x: [c, c],
+          y: [v, v],
+          z: [zVal, zVis],
+          line: { color: "rgba(255,255,255,0.95)", width: 5 },
+          hoverinfo: "skip",
+          showlegend: false
+        },
+        {
+          type: "scatter3d",
+          mode: "markers",
+          x: [c],
+          y: [v],
+          z: [zVis],
+          marker: {
+            size: 4.2,
+            color: "#e63946",
+            opacity: 1,
+            line: { color: "#ffffff", width: 1.6 }
+          },
+          name: "Current state",
+          showlegend: false
+        }
+      ], {
+        margin: { l: 0, r: 4, b: 0, t: 0 },
+        paper_bgcolor: "rgba(0,0,0,0)",
+        scene: {
+          xaxis: {
+            title: "confidence c",
+            range: [0, 1],
+            tickmode: "array",
+            tickvals: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+            tickfont: { size: 10, color: "#3a5a61" },
+            titlefont: { size: 12, color: "#214149" },
+            gridcolor: "rgba(44,76,83,0.34)",
+            zerolinecolor: "rgba(44,76,83,0.24)",
+            showline: true,
+            linecolor: "rgba(32,58,64,0.92)",
+            linewidth: 2,
+            showbackground: true,
+            backgroundcolor: "rgba(245,249,248,0.70)"
+          },
+          yaxis: {
+            title: "variance v",
+            range: [vMin3d, vMax],
+            tickmode: "array",
+            tickvals: vTicksLinear,
+            ticktext: vTickTextLinear,
+            tickfont: { size: 10, color: "#3a5a61" },
+            titlefont: { size: 12, color: "#214149" },
+            gridcolor: "rgba(44,76,83,0.34)",
+            zerolinecolor: "rgba(44,76,83,0.24)",
+            showline: true,
+            linecolor: "rgba(32,58,64,0.92)",
+            linewidth: 2,
+            showbackground: true,
+            backgroundcolor: "rgba(245,249,248,0.70)"
+          },
+          zaxis: {
+            title: "steering weight",
+            range: [zStats3d.min, zStats3d.max + markerLift * 1.06],
+            tickfont: { size: 10, color: "#3a5a61" },
+            titlefont: { size: 12, color: "#214149" },
+            gridcolor: "rgba(44,76,83,0.34)",
+            zerolinecolor: "rgba(44,76,83,0.24)",
+            showline: true,
+            linecolor: "rgba(32,58,64,0.92)",
+            linewidth: 2,
+            showbackground: true,
+            backgroundcolor: "rgba(245,249,248,0.70)"
+          },
+          camera: { eye: { x: -2.14, y: 0.38, z: 0.42 } },
+          aspectratio: { x: 1.0, y: 1.08, z: 1.0 }
+        }
+      }, { displayModeBar: false, responsive: true });
+
+      Plotly.newPlot("surface2d", [
+        {
+          type: "heatmap",
+          x: cAxis,
+          y: vAxis2d,
+          z: zGrid2d,
+          colorscale: "Viridis",
+          zmin: colorMin,
+          zmax: colorMax,
+          zsmooth: "best",
+          colorbar: {
+            title: { text: "steering weight", side: "right", font: { size: 12, color: "#24464d" } },
+            len: 0.71,
+            y: 0.52,
+            thickness: 11,
+            tickfont: { size: 10, color: "#35565d" },
+            outlinewidth: 0.6,
+            outlinecolor: "rgba(26,59,66,0.55)"
+          }
+        },
+        {
+          type: "contour",
+          x: cAxis,
+          y: vAxis2d,
+          z: zGrid2d,
+          contours: { coloring: "none", showlabels: false, start: colorMin, end: colorMax, size: 0.3 },
+          line: { width: 0.7, color: "rgba(255,255,255,0.58)" },
+          showscale: false
+        },
+        {
+          type: "scatter",
+          mode: "markers",
+          x: [c],
+          y: [v],
+          marker: { size: 11, color: "#e63946", line: { color: "#ffffff", width: 1.8 } },
+          name: "Current state",
+          showlegend: false
+        }
+      ], {
+        margin: { l: 44, r: 12, b: 38, t: 6 },
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        xaxis: {
+          title: "confidence c",
+          range: [0, 1],
+          tickmode: "array",
+          tickvals: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+          tickfont: { size: 10, color: "#3a5a61" },
+          titlefont: { size: 12, color: "#214149" },
+          gridcolor: "rgba(44,76,83,0.18)",
+          zerolinecolor: "rgba(44,76,83,0.24)"
+        },
+        yaxis: {
+          title: "variance v (log)",
+          range: [Math.log10(vMinHeat), Math.log10(vMax)],
+          type: "log",
+          tickmode: "array",
+          tickvals: vTicksLog,
+          ticktext: vTickTextLog,
+          tickfont: { size: 10, color: "#3a5a61" },
+          titlefont: { size: 12, color: "#214149" },
+          gridcolor: "rgba(44,76,83,0.18)",
+          zerolinecolor: "rgba(44,76,83,0.24)"
+        },
+        shapes: thresholdShapes()
+      }, { displayModeBar: false, responsive: true });
+
+      plotsReady = true;
+    }
+
+    function updateSimulator() {
+      const c = Number(confidenceSlider.value);
+      const v = sliderToVariance(Number(varianceSlider.value));
+      confidenceValue.textContent = c.toFixed(3);
+      varianceValue.textContent = v.toExponential(3);
+
+      let mode = "Balanced Thinking";
+      if (c <= controlFn.q25c && v >= controlFn.q75v) mode = "Overthinking";
+      if (c >= controlFn.q75c && v <= controlFn.q25v) mode = "Underthinking";
+
+      const fCur = controlFn.f(c, v);
+      const wLowCur = controlFn.wLow(c, v);
+      const wHighCur = controlFn.wHigh(c, v);
+
+      modePill.textContent = mode;
+      setModeClass(mode);
+
+      fValue.textContent = fCur.toFixed(3);
+      wLowValue.textContent = wLowCur.toFixed(3);
+      wHighValue.textContent = wHighCur.toFixed(3);
+
+      if (mode === "Overthinking") {
+        simNote.textContent = "The model exhibits hesitation and frequently switch reasoning path. The controller guides it to converge efficiently by eliminating redundant steps.";
+      } else if (mode === "Underthinking") {
+        simNote.textContent = "The model exhibits premature certainty. The controller encourages further exploration before finalizing an answer.";
+      } else {
+        simNote.textContent = "The reasoning state is healthy, requiring only slight adjustments to maintain efficiency and reliability.";
+      }
+
+      if (!plotsReady) {
+        initPlots(c, v);
+      }
+      if (plotsReady) {
+        const zVis = fCur + markerLift;
+        Plotly.restyle("surface3d", { x: [[c, c]], y: [[v, v]], z: [[fCur, zVis]] }, [1]);
+        Plotly.restyle("surface3d", { x: [[c]], y: [[v]], z: [[zVis]] }, [2]);
+        Plotly.restyle("surface2d", { x: [[c]], y: [[Math.max(v, vMinHeat)]] }, [2]);
+      }
+    }
+
+    confidenceSlider.addEventListener("input", updateSimulator);
+    varianceSlider.addEventListener("input", updateSimulator);
+    updateSimulator();
+
+    const caseTabs = Array.from(document.querySelectorAll(".case-tab"));
+    const casePanels = Array.from(document.querySelectorAll("[data-case-panel]"));
+
+    function switchCase(key) {
+      caseTabs.forEach(tab => tab.classList.toggle("active", tab.dataset.caseKey === key));
+      casePanels.forEach(panel => panel.classList.toggle("active", panel.dataset.casePanel === key));
+    }
+
+    caseTabs.forEach(tab => {
+      tab.addEventListener("click", () => switchCase(tab.dataset.caseKey));
+    });
+
+    function formatQualitativeRawOutputs() {
+      const blocks = Array.from(document.querySelectorAll("#qualitative .sample-body"));
+      blocks.forEach((el) => {
+        let html = el.innerHTML;
+        html = html.replace(/\\n/g, "<br>");
+        // Convert plain sqrt(...) / \sqrt(...) and \sqrt{...} into inline math.
+        html = html.replace(/\\?sqrt\(([^()\n]+)\)/g, (match, inner, offset, source) => {
+          const prev = offset > 0 ? source[offset - 1] : "";
+          const hasLeadingBackslash = match.startsWith("\\");
+          if (hasLeadingBackslash && prev === "\\") return match;
+          if (!hasLeadingBackslash && /[A-Za-z\\]/.test(prev)) return match;
+          return `\\(\\sqrt{${inner}}\\)`;
+        });
+        html = html.replace(/\\sqrt\{([^{}]+)\}/g, (match, inner, offset, source) => {
+          const prev = offset > 0 ? source[offset - 1] : "";
+          const prev2 = offset > 1 ? source[offset - 2] : "";
+          if (prev === "\\") return match;
+          if (prev === "(" && prev2 === "\\") return match;
+          return `\\(\\sqrt{${inner}}\\)`;
+        });
+        html = html.split("\\\\(").join("\\(");
+        html = html.split("\\\\)").join("\\)");
+        html = html.split("\\\\[").join("\\[");
+        html = html.split("\\\\]").join("\\]");
+        html = html.replace(/\\\\([a-zA-Z]+)/g, "\\$1");
+        html = html.replace(/\*\*Final Answer\*\*/g, "<strong>Final Answer</strong>");
+        html = html.replace(/\*\*Answer:\*\*/g, "<strong>Answer:</strong>");
+        html = html.replace(/Generated response:/g, "<strong>Generated response:</strong>");
+        el.innerHTML = html;
+      });
+
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise(blocks).catch(() => {});
+      }
+    }
+
+    formatQualitativeRawOutputs();
+
+    const revealNodes = document.querySelectorAll(".reveal");
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible");
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    revealNodes.forEach(node => revealObserver.observe(node));
+
+    const counterNodes = document.querySelectorAll(".counter");
+    const counterObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        const target = Number(el.dataset.target || "0");
+        const decimals = Number(el.dataset.decimals || "0");
+        const duration = 920;
+        const startTime = performance.now();
+        function frame(t) {
+          const p = Math.min(1, (t - startTime) / duration);
+          const eased = 1 - Math.pow(1 - p, 3);
+          const value = target * eased;
+          el.textContent = value.toFixed(decimals);
+          if (p < 1) requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+        counterObserver.unobserve(el);
+      });
+    }, { threshold: 0.4 });
+    counterNodes.forEach(node => counterObserver.observe(node));
+
+    const topBtn = document.getElementById("topBtn");
+    window.addEventListener("scroll", () => {
+      topBtn.classList.toggle("show", window.scrollY > 550);
+    });
+    topBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    const copyBib = document.getElementById("copyBib");
+    const bibtex = document.getElementById("bibtex");
+    copyBib.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(bibtex.textContent);
+        copyBib.textContent = "Copied";
+      } catch (err) {
+        copyBib.textContent = "Copy failed";
+      }
+      setTimeout(() => { copyBib.textContent = "Copy BibTeX"; }, 1300);
+    });
+  </script>
+</body>
+</html>
