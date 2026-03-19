@@ -1242,7 +1242,7 @@
         <a href="#why">Why</a>
         <a href="#motivation">Motivation</a>
         <a href="#method">Method</a>
-        <a href="#simulator">Simulator</a>
+        <a href="#simulator">Demo</a>
         <a href="#benchmarks">Benchmarks</a>
         <a href="#qualitative">Examples</a>
         <a href="#resources">Resources</a>
@@ -1260,7 +1260,7 @@
             ReBalance is a training-free framework that dynamically steers large reasoning models to achieve balanced thinking, reducing reasoning length while simultaneously improving accuracy.
           </p>
           <div class="authors">
-            <strong>Yulin Li*</strong>, <strong>Tengyao Tu*</strong>, Li Ding, Junjie Wang, Huiling Zhen, Yixin Chen, Yong Li, Zhuotao Tian
+            Yulin Li<sup>&dagger;</sup>, Tengyao Tu<sup>&dagger;</sup>, Li Ding, Junjie Wang, Huiling Zhen, Yixin Chen, Yong Li, Zhuotao Tian<sup>*</sup>
           </div>
           <div class="affils">
             <span>1 Harbin Institute of Technology (Shenzhen)</span>
@@ -1274,7 +1274,7 @@
             <a class="btn primary" href="https://huggingface.co/papers/2603.12372" target="_blank" rel="noopener noreferrer">Paper</a>
             <a class="btn secondary" href="https://github.com/yu-lin-li/ReBalance" target="_blank" rel="noopener noreferrer">Code</a>
             <a class="btn secondary" href="https://huggingface.co/Yulin-Li/ReBalance" target="_blank" rel="noopener noreferrer">Model</a>
-            <a class="btn ghost" href="#simulator">Try Interactive Simulator</a>
+            <a class="btn ghost" href="#simulator">Try Interactive Demo</a>
           </div>
         </article>
 
@@ -1436,10 +1436,14 @@
     </section>
 
     <section id="simulator" class="reveal">
-      <div class="container sim-grid">
+      <div class="container">
+        <div class="section-head">
+          <h2>Interactive Demo</h2>
+        </div>
+        <div class="sim-grid">
         <article class="sim-panel">
           <div class="section-head">
-            <h2>Interactive Dynamic Steering Simulator</h2>
+            <h2>Dynamic Steering Simulator</h2>
             <p>Use the sliders to see how ReBalance changes steering behavior based on stepwise confidence and confidence variance in real time.</p>
           </div>
           <div class="control">
@@ -1494,6 +1498,7 @@
           </div>
           <p class="threshold-note">Dashed guide lines indicate q25/q75 boundaries in confidence and variance, which separate balanced thinking, overthinking, and underthinking regions.</p>
         </article>
+        </div>
       </div>
     </section>
 
@@ -1642,7 +1647,7 @@
 
   <footer class="foot">
     <div class="container">
-      <p>* indicates equal contribution. Corresponding author: Zhuotao Tian.</p>
+      <p><sup>&dagger;</sup> indicates equal contribution. Corresponding author: Zhuotao Tian.</p>
       <p>© 2026 ReBalance Project Page.</p>
     </div>
   </footer>
